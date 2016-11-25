@@ -1,0 +1,24 @@
+#' mdpeer: Performs graph-constrained regression with enhanced regularization parameters selection.
+#'
+#' Performs graph-constrained regularization in which regularization parameters 
+#' are selected with the use of a known fact of equivalence between penalized 
+#' regression and Linear Mixed Model solutions. Provides three different 
+#' regression methods where graph-constraints among coefficients are accounted for:
+#' crPEER, vrPEER and RidgePEER. crPEER method utilizes additional Ridge term to 
+#' handle the non-invertibility of a graph Laplacian matrix. 
+#' vrPEER method performs variable-reduction procedure to handle the non-invertibility of a graph Laplacian matrix. 
+#' Finally, RidgePEER 
+#'  method employs a penalty term being a linear combination of graph-originated 
+#'  and Ridge-originated penalty terms, whose two regularization parameters are 
+#'  ML estimators from corresponding Linear Mixed Model solution. Notably, 
+#'  in RidgePEER method a graph-originated penalty term allows imposing similarity 
+#'  between coefficients based on graph information given whereas additional 
+#'  Ridge-originated penalty term facilitates parameters estimation: it reduces 
+#'  computational issues arising from singularity in a graph-originated penalty 
+#'  matrix and yields plausible results in situations when graph information is 
+#'  not informative or when it is unclear whether connectivities represented 
+#'  by a graph reflect similarities among corresponding coefficients.  
+#'
+#' @docType package
+#' @name mdpeer
+NULL

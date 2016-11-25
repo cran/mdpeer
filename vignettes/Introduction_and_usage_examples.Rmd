@@ -1,0 +1,418 @@
+---
+title: "Graph-constrained Regression with Enhanced Regulariazation Parameters Selection: introduction and usage examples"
+author: "Marta Karas <marta.karass@gmail.com>"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{Introduction and usage examples}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Intro 
+
+With `mdpeer` `R` package one can perform **penalized regression estimation with a penalty term being a linear combination of a graph-originated penalty and a Ridge-originated penalty terms**. 
+
+A graph-originated penalty term allows imposing similarity between coefficients of variables which are *similar* (or *connected*), based on some graph information given. Additional Ridge-originated penalty term facilitates parameters estimation: it reduces computational issues (arising from singularity in a graph-originated penalty matrix) and yields plausible results in situations when graph information is not informative or when it is unclear whether connectivities represented by a graph reflect similarities among corresponding coefficients.
+
+The key contribution of the `mdpeer` package is providing implementation of model regularization parameters $\lambda$ ($\lambda_Q$, $\lambda_R$) selection. The methodology utilizes the known fact of equivalence between penalized regression and Linear Mixed Model solutions ([5]), and provides values of the two regularization parameters that are Maximum Likelihood estimators of the latter.  
+
+
+
+## RidgePEER regression model  
+
+We assume a model of the following form: 
+$$y = X\beta + Zb + \varepsilon$$
+and we estimate its coefficients $\beta, b$ as follows: 
+$$\widehat{\beta}, \widehat{b}= \underset{\beta,b}{arg \; min}\left \{ (y - X\beta - Zb)^T(y - X\beta - Zb) + \lambda_Qb^TQb +  \lambda_Rb^Tb\right \},$$
+where: 
+
+- $y$ - a response matrix,
+- $X$ - matrix of variables whose coefficients we do not want to penalize in the estimation process,
+- $Z$ - matrix of variables whose coefficients we want to penalize in the estimation process,
+- $Q$ - a graph-originated penalty matrix, typically: a graph Laplacian matrix,
+- $\lambda_Q$, $\lambda_R$ - regularization parameters. 
+
+## Model penalty  
+
+From the formula above one can see that: 
+
+- $b^TQb$ denotes a graph-originated model penalty term,
+- $b^Tb$ denotes a Ridge-originated model penalty term.
+
+Below we provide an overview of the graph-originated model penalty term role, list possible benefits one can achieve with the combination of a graph-originated and a Ridge-originated penalty and introduce the way of regularization parameter $\lambda$ selection procedure implemented in `mdpeer`.
+
+### Graph-originated penalty term
+
+The properties of a graph-constrained (network-constrained) regularization are discussed in detail in [1]:  [Network-constrained regularization and variable selection for analysis of genomic data](http://bioinformatics.oxfordjournals.org/content/24/9/1175.full) by Li, Li (2008). Here, we aim at presenting the explicit form of the penalty term $b^TQb$ to show how it affects the model coefficients in the estimation process. 
+
+Following [1], we consider a network represented by a weighted graph $G$: 
+$$G = (V, E, W),$$ where $V$ is the set of vertices $v$, $E = \{v \sim t\}$ is the set of edges indicating that the vertices $v$ and $t$ are linked on the network and $W$ are the weights of the edges, such as $w(t, v)$ denotes the weight of edge $e = (t \sim v)$. 
+
+In application, one might consider vertices $v$ as the $p$ regression model predictors, whose pairwise *similarity* strength is defined by weights $w$ of the corresponding edges $e$.
+
+#### *Laplacian*
+
+Let $d_v = \sum_{v \sim t}w(v,t)$ denote degree of node $v$. We define a graph Laplacian matrix as: 
+$$
+L_{(v,t)} = 
+\begin{cases} 
+d_v &\mbox{if } v = t\\ 
+-w(v,t) & \mbox{if } v \mbox{ and } t \mbox{ are connected}. \\
+0 & \mbox{ otherwise }
+\end{cases}
+$$
+Let us assume $Q=L$ for $L$ being a graph Laplacian matrix. Then, $b^TQb$ can be rewritten as: 
+$$b^TQb = \sum _{v \sim t}\left ( b_v - b_t \right )^2w(v,t).$$
+From the above formula one can clearly see that $b^TQb$ leads to penalizing squared differences of coefficients between pairs of variables (nodes) which are *connected* in the graph and that the penalty is proportional to the strength of connection represented by $w(v,t)$. 
+
+
+#### *Normalized Laplacian*
+
+One may consider using a normalized version of Laplacian graph matrix, defined as follows: 
+$$
+L_{(v,t)} = 
+\begin{cases} 
+1 -w(v,t)/d_v 
+ &\mbox{if } v = t \mbox{ and } v \neq  0\\ 
+-w(v,t)/\sqrt{d_vd_t} & \mbox{if } v \mbox{ and } t \mbox{ are connected}. \\
+0 & \mbox{ otherwise }
+\end{cases}
+$$
+Let us assume $Q=L$ for $L$ being a normalized version of a graph Laplacian matrix. For such $L$, $b^TQb$ can be rewritten as: 
+$$b^TQb = \sum _{v \sim t}\left ( \frac{b_v}{\sqrt{d_v}} -  \frac{b_t}{\sqrt{d_t}}  \right )^2w(v,t).$$
+As noted in [2]:  [Variable selection and regression analysis for graph-structured covariates with an application to genomics](https://arxiv.org/pdf/1011.3360.pdf) by Li, Li (2010), scaling by $\sqrt{d_v}$ factor allows a small number of nodes with large $d_v$ to have more extreme values of $b_v$ coefficients while the usually much greater number of
+nodes with small $d_v$ is not ordinarily allowed to have very large $b_v$. 
+
+
+### Combination of a graph-originated penalty term and a Ridge-originated penalty term
+
+Theoretical and empirical characteristics of the penalty: $\lambda_Qb^TQb +  \lambda_Rb^Tb$ are discusses in detail in [3]. The main motivation for adding the Ridge-originated part:
+$$b^Tb = ||b||_2^2 = \sum_v b_v^2$$
+is to deal with computational issues that appear in the estimation process due to singualrity of Laplacian matrix as well as to deliver alternative form of shirnkage among the coefficients in situations when the network information is not accurate or informative, or when it is unclear whether network connectivities correspond to similarities among corresponding coefficients.
+
+## Regularization parameters $\lambda_Q$, $\lambda_R$ selection
+
+Important issue with penalized regression techniques is how to select value of tuning parameter(s) which decide on the amount of regularization imposed on the coefficients. Many selection criteria have been
+proposed, including cross-validation, AIC and its finite sample corrections. 
+
+In `mdpeer` package, we extend the idea employed in [4]: [Structured penalties for functional linear models—partially empirical eigenvectors for regression](http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3358792/) by T. Randolph, J. Harezlak, Z. Feng (2012), which utilizes equivalence between the penalized least squares estimation and a linear mixed model (LMM) representation ([5]). In our case, we are interested in estimating two regularization parameters $\lambda_Q$, $\lambda_R$  simultaneously. As we proved in [3], the problem of estimation in the considered situation could be reduced to the task of building the numerical procedure which finds the minimum of some objective function $h$. Then, the Maximum Likelihood estimators of $\lambda = (\lambda_Q$, $\lambda_R)$ can be found. 
+
+
+# `RidgePEER` usage: toy example 
+
+Below, we present toy examples of `RidgePEER` function: 
+
+* Example 1.: regression model without non-penalized covariates (no matrix $X$)  
+* Example 2.: regression model with non-penalized covariates  
+
+
+#### Additional network information: Adjacency and Laplacian matrices 
+
+We follow an example of a graph Adjacency matrix construction from `glmnet` package [documentation](https://CRAN.R-project.org/package=glmgraph).
+
+
+```{r, fig.width = 3.3, fig.height = 2.7}
+library(mdpeer)
+
+n <- 100
+p1 <- 10
+p2 <- 90
+p <- p1 + p2
+
+# Define graph Adjacency matrix
+A <- matrix(rep(0, p*p), nrow = p, ncol = p)
+A[1:p1, 1:p1] <- 1
+A[(p1+1):p, (p1+1):p] <- 1
+
+# Compute graph Laplacian matrix 
+L <- Adj2Lap(A)
+L.norm <- L2L.normalized(L)
+
+# Vizualize matrices
+vizu.mat(A, title = "Adjacency matrix")
+vizu.mat(L, title = "Laplacian matrix"); vizu.mat(L.norm, title = "Laplacian matrix (normalized)")
+```
+
+
+## Example 1.: graph-constrained model    
+
+#### Data objects 
+
+```{r}
+set.seed(1234)
+n <- 200 
+p1 <- 10
+p2 <- 90
+p <- p1 + p2
+A <- matrix(rep(0, p*p), nrow = p, ncol = p)
+A[1:p1, 1:p1] <- 1
+A[(p1+1):p, (p1+1):p] <- 1
+L <- Adj2Lap(A)
+L.norm <- L2L.normalized(L)
+Z <- matrix(rnorm(n*p), nrow = n, ncol = p)
+b.true<- c(rep(1, p1), rep(0, p2))
+beta.true <- runif(3)
+intercept <- 0
+eta <- intercept + Z %*% b.true 
+R2 <- 0.5 # assumed variance explained 
+sd.eps <- sqrt(var(eta) * (1 - R2) / R2)
+error <- rnorm(n, sd = sd.eps)
+Y <- eta + error
+```
+
+
+#### Model fitting 
+
+```{r, message=FALSE}
+?RidgePEER
+
+RidgePEER.fit <- RidgePEER(Q = L.norm, y = Y, Z = Z, X = NULL)
+
+# Optimal lambda regularization parameter values
+c(RidgePEER.fit$lambda.Q, RidgePEER.fit$lambda.R)
+```
+
+
+#### $b$ estimates obtained 
+
+```{r, fig.width = 3.3, fig.height = 3.3}
+# Intercept estimate (the only non-penalized coefficient in this setting)
+RidgePEER.fit$beta.est
+
+# Compare true b estimates and RidgePEER estimates 
+b.est.RidgePEER <- RidgePEER.fit$b.est
+plot.y.lim <- range(c(b.true, b.est.RidgePEER))
+par(cex = 0.7)
+plot(b.true, main = "b.true", ylab = "", xlab = "", ylim = plot.y.lim); plot(b.est.RidgePEER, main = "b.est.RidgePEER", ylab = "", xlab = "", col = "blue", ylim = plot.y.lim)
+
+# b estimation MSE 
+mean((b.true - b.est.RidgePEER)^2)
+```
+
+
+## Example 2.: graph-constrained model with covariates   
+
+#### Data objects 
+
+```{r}
+set.seed(1234)
+n <- 200 
+p1 <- 10
+p2 <- 90
+p <- p1 + p2
+A <- matrix(rep(0, p*p), nrow = p, ncol = p)
+A[1:p1, 1:p1] <- 1
+A[(p1+1):p, (p1+1):p] <- 1
+L <- Adj2Lap(A)
+L.norm <- L2L.normalized(L)
+Z <- matrix(rnorm(n*p), nrow = n, ncol = p)
+b.true<- c(rep(1, p1), rep(0, p2))
+X <- matrix(rnorm(n*3), nrow = n, ncol = 3)
+beta.true <- runif(3)
+intercept <- 0
+eta <- intercept + Z %*% b.true + X %*% beta.true
+R2 <- 0.5 # assumed variance explained 
+sd.eps <- sqrt(var(eta) * (1 - R2) / R2)
+error <- rnorm(n, sd = sd.eps)
+Y <- eta + error
+```
+
+
+#### Model fitting 
+
+```{r, message=FALSE}
+RidgePEER.fit <- RidgePEER(Q = L.norm, y = Y, Z = Z, X = X)
+
+# Optimal lambda regularization parameter values
+c(RidgePEER.fit$lambda.Q, RidgePEER.fit$lambda.R)
+```
+
+
+#### $\beta$ estimates obtained
+
+```{r}
+# Intercept and 3 covariates estimates 
+RidgePEER.fit$beta.est
+```
+
+#### $b$ estimates obtained 
+
+```{r, fig.width = 3.3, fig.height = 3.3}
+# Compare true b estimates and RidgePEER estimates 
+b.est.RidgePEER <- RidgePEER.fit$b.est
+plot.y.lim <- range(c(b.true, b.est.RidgePEER))
+par(cex = 0.7)
+plot(b.true, main = "b.true", ylab = "", xlab = "", ylim = plot.y.lim); plot(b.est.RidgePEER, main = "b.est.RidgePEER", ylab = "", xlab = "", col = "blue", ylim = plot.y.lim)
+
+# b estimation MSE 
+mean((b.true - b.est.RidgePEER)^2)
+```
+
+
+
+# `RidgePEER` motivation: non-informative graph information scenario 
+
+Here, we present a possible scenario which was a part of motivation behind `RidgePEER` development - a **situation in which a graph of connections between the variables is not informative** (in other words: it does not reflect accurately the underlying structure of $b_{true}$ coefficients). 
+
+We compare coefficient estimation results from `RidgePEER` function with 3 different settings:
+
+- combination of graph-originated (PEER-originated) penalty and Ridge-originated penalty terms (*default* `RidgePEER` setting),
+- Ridge-originated penalty term only,
+- graph-originated PEER-originated) penalty term only. 
+
+We work with a possible real-data application situation when the underlying signal in observed data is low. We see that **`RidgePEER` *default* setting, which integrates both PEER-originated and Ridge-originated penalties, takes advantage of that of those two penalties which yields a "winning solution" if a model is set to use one of the two penalties only**: 
+
+- it performs in a PEER estimator manner in example where given connectivity information is informative and we benefit from utilizing it in the estimation process;
+- on the other hand, when given connectivity information is strongly uninformative and Ridge regression yields more accurate estimation results, `RidgePEER` *default* procedure results in estimates Ridge likewise.
+
+
+## Example 1.: informative graph information 
+
+#### Data objects 
+
+```{r}
+set.seed(1234)
+n <- 200 
+p1 <- 10
+p2 <- 90
+p <- p1 + p2
+A <- matrix(rep(0, p*p), nrow = p, ncol = p)
+A[1:p1, 1:p1] <- 1
+A[(p1+1):p, (p1+1):p] <- 1
+L <- Adj2Lap(A)
+L.norm <- L2L.normalized(L)
+Z <- matrix(rnorm(n*p), nrow = n, ncol = p)
+b.true <- c(rep(1, p1), rep(0, p2))
+beta.true <- runif(3)
+intercept <- 0
+eta <- intercept + Z %*% b.true
+R2 <- 0.15 # assumed variance explained 
+sd.eps <- sqrt(var(eta) * (1 - R2) / R2)
+error <- rnorm(n, sd = sd.eps)
+Y <- eta + error
+```
+
+
+```{r, fig.width = 3.3, fig.height = 2.7, echo = FALSE}
+par(cex = 0.7)
+vizu.mat(A, title = "Adjacency matrix", base_size = 8); plot(b.true, main = "b.true", ylab = "", xlab = "")
+```
+
+
+#### Model fitting
+
+```{r, message=FALSE}
+RidgePEER.fit <- RidgePEER(Q = L.norm, y = Y, Z = Z, X = X)
+PEER.fit      <- RidgePEER(Q = L.norm, y = Y, Z = Z, X = X, add.Ridge = FALSE)
+Ridge.fit     <- RidgePEER(Q = L.norm, y = Y, Z = Z, X = X, add.PEER = FALSE)
+```
+
+
+#### $b$ estimates obtained 
+
+```{r, echo=FALSE}
+par(cex = 0.7)
+plot(RidgePEER.fit$b.est, main = "b coefficients \n(graph-orig. + Ridge-orig. penalty)", ylab = "", xlab = "")
+plot(PEER.fit$b.est, main = "b coefficients \n(graph-originated penalty only)", ylab = "", xlab = "")
+plot(Ridge.fit$b.est, main = "b coefficients \n(Ridge-originated penalty only)", ylab = "", xlab = "")
+```
+
+```{r}
+# b coeffcient estimates MSE
+RidgePEER.b.MSE <- mean((RidgePEER.fit$b.est - b.true)^2)
+PEER.b.MSE      <- mean((PEER.fit$b.est - b.true)^2)
+Ridge.b.MSE     <- mean((Ridge.fit$b.est - b.true)^2)
+
+# MSE
+MSE.vec <- c(RidgePEER.b.MSE, PEER.b.MSE, Ridge.b.MSE)
+names(MSE.vec) <- c("RidgePEER", "PEER", "Ridge")
+round(MSE.vec, 4)
+
+# MSE: % of RidgePEER
+round(MSE.vec*(1/MSE.vec[1]), 4)
+```
+
+
+
+## Example 2.: non-informative graph information 
+
+#### Data objects 
+
+```{r}
+set.seed(1234)
+n <- 200 
+p1 <- 10
+p <- p1*10
+A <- matrix(rep(0, p*p), nrow = p, ncol = p)
+A.pos <- as.logical(rep(c(rep(1, 10), rep(0, 10)), 5))
+A[A.pos, A.pos] <- 1
+L <- Adj2Lap(A)
+L.norm <- L2L.normalized(L)
+Z <- matrix(rnorm(n*p), nrow = n, ncol = p)
+b.true <- as.numeric(c(A.pos[6:100], A.pos[1:5]))
+X <- matrix(rnorm(n*3), nrow = n, ncol = 3)
+beta.true <- runif(3)
+intercept <- 0
+eta <- intercept + Z %*% b.true+ X %*% beta.true
+R2 <- 0.15 # assumed variance explained 
+sd.eps <- sqrt(var(eta) * (1 - R2) / R2)
+error <- rnorm(n, sd = sd.eps)
+Y <- eta + error
+```
+
+
+```{r, fig.width = 3.3, fig.height = 2.7, echo = FALSE}
+par(cex = 0.7)
+vizu.mat(A, title = "Adjacency matrix", base_size = 8); plot(b.true, main = "b.true", ylab = "", xlab = "")
+```
+
+
+#### Model fitting
+
+```{r, message=FALSE}
+RidgePEER.fit <- RidgePEER(Q = L.norm, y = Y, Z = Z, X = X)
+PEER.fit      <- RidgePEER(Q = L.norm, y = Y, Z = Z, X = X, add.Ridge = FALSE)
+Ridge.fit     <- RidgePEER(Q = L.norm, y = Y, Z = Z, X = X, add.PEER = FALSE)
+```
+
+
+#### $b$ estimates obtained 
+
+```{r, echo=FALSE}
+par(cex = 0.7)
+plot(RidgePEER.fit$b.est, main = "b coefficients \n(graph-orig. + Ridge-orig. penalty)", ylab = "", xlab = "")
+plot(PEER.fit$b.est, main = "b coefficients \n(graph-originated penalty only)", ylab = "", xlab = "")
+plot(Ridge.fit$b.est, main = "b coefficients \n(Ridge-originated penalty only)", ylab = "", xlab = "")
+```
+
+```{r}
+# b coeffcient estimates MSE
+RidgePEER.b.MSE <- mean((RidgePEER.fit$b.est - b.true)^2)
+PEER.b.MSE      <- mean((PEER.fit$b.est - b.true)^2)
+Ridge.b.MSE     <- mean((Ridge.fit$b.est - b.true)^2)
+
+# MSE
+MSE.vec <- c(RidgePEER.b.MSE, PEER.b.MSE, Ridge.b.MSE)
+names(MSE.vec) <- c("RidgePEER", "PEER", "Ridge")
+round(MSE.vec, 4)
+
+# MSE: % of RidgePEER
+round(MSE.vec*(1/MSE.vec[1]), 4)
+```
+
+
+[1] : Li, C., Li, H., Network-constrained regularization and variable selection for analysis of genomic data. 
+Bioinformatics (2008): 24(9), 1175-1182.
+
+[2] : Li, C., Li, H., Variable selection and regression analysis for graph-structured covariates with an application to genomics. The Annals of Applied Statistics (2010): 4(3), 1498–1516.
+
+[3] : Karas, M., Brzyski, D., Randolph, T., Harezlak, D. Brain connectivity-informed regularization methods for regression. Paper in progress, to be submited as an invited paper on CCNS for a special issue of  Statistics in Biosciences by Nov 30, 2016 (reference will be updated).
+
+[4] :  Randolph, T., Harezlak, J., Feng, Z., Structured penalties for functional linear models—partially empirical eigenvectors for regression. The Electronic Journal of Statistics (2012): 6, 323-353.
+
+[5] : Brumback, B. A., Ruppert, D., Wand, M. P., Comment on 'Variable selection and function estimation in
+additive nonparametric regression using a data-based prior'. Journal of the American Statistical
+Association (1999): 94, 794–797.
