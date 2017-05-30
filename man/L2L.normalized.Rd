@@ -2,7 +2,7 @@
 % Please edit documentation in R/L2Lnormalized.R
 \name{L2L.normalized}
 \alias{L2L.normalized}
-\title{Compute normalized version of a graph Laplcian matrix}
+\title{Compute normalized version of graph Laplacian matrix}
 \usage{
 L2L.normalized(L)
 }
@@ -13,25 +13,24 @@ L2L.normalized(L)
 normalized graph Laplacian matrix
 }
 \description{
-Compute normalized version of a graph Laplcian matrix
+Compute normalized version of graph Laplacian matrix
 }
 \examples{
-# Construct exemplary Adjacency and corresponding Laplacian matrices
+# Define exemplary adjacency matrix
 p1 <- 10
-p2 <- 90
+p2 <- 40
 p <- p1 + p2
 A <- matrix(rep(0, p * p), p, p)
 A[1:p1, 1:p1] <- 1
 A[(p1 + 1):p, (p1 + 1):p] <- 1
-diag(A) <- 0
-diagL <- apply(A, 1, sum)
-L <- -A
-diag(L) <- diagL
-vizu.mat(L, "L Laplacian matrix")
+vizu.mat(A, "adjacency matrix")
 
-# Compute normalized version of a Laplacian matrix
+# Compute corresponding Laplacian matrix
+L <- Adj2Lap(A)
+vizu.mat(L, "Laplacian matrix")
+
+# Compute corresponding Laplacian matrix - normalized
 L.norm <- L2L.normalized(L)
 vizu.mat(L.norm, "L Laplacian matrix (normalized)")
 
 }
-

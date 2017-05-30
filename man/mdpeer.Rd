@@ -4,25 +4,24 @@
 \name{mdpeer}
 \alias{mdpeer}
 \alias{mdpeer-package}
-\title{mdpeer: Performs graph-constrained regression with enhanced regularization parameters selection.}
+\title{mdpeer: Methods for graph-constrained regression with enhanced regularization parameters selection}
 \description{
-Performs graph-constrained regularization in which regularization parameters 
-are selected with the use of a known fact of equivalence between penalized 
-regression and Linear Mixed Model solutions. Provides three different 
-regression methods where graph-constraints among coefficients are accounted for:
-crPEER, vrPEER and RidgePEER. crPEER method utilizes additional Ridge term to 
-handle the non-invertibility of a graph Laplacian matrix. 
-vrPEER method performs variable-reduction procedure to handle the non-invertibility of a graph Laplacian matrix. 
-Finally, RidgePEER 
- method employs a penalty term being a linear combination of graph-originated 
- and Ridge-originated penalty terms, whose two regularization parameters are 
- ML estimators from corresponding Linear Mixed Model solution. Notably, 
- in RidgePEER method a graph-originated penalty term allows imposing similarity 
- between coefficients based on graph information given whereas additional 
- Ridge-originated penalty term facilitates parameters estimation: it reduces 
- computational issues arising from singularity in a graph-originated penalty 
- matrix and yields plausible results in situations when graph information is 
- not informative or when it is unclear whether connectivities represented 
- by a graph reflect similarities among corresponding coefficients.
+Provides graph-constrained
+regression methods in which regularization parameters 
+are selected automatically via estimation of equivalent Linear
+Mixed Model formulation.  
+'riPEER' (ridgified Partially Empirical Eigenvectors for
+Regression) method employs a penalty term being
+a linear combination of graph-originated and ridge-originated penalty terms,
+whose two regularization parameters are ML estimators from corresponding Linear
+Mixed Model solution; a graph-originated penalty
+term allows imposing similarity between coefficients based on graph information
+given whereas additional ridge-originated penalty term facilitates parameters
+estimation: it reduces computational issues arising from singularity in a graph-originated 
+penalty matrix and yields plausible results in situations when graph
+information is not informative. 'riPEERc' (ridgified Partially Empirical Eigenvectors for
+Regression with constant) method utilizes addition of a diagonal matrix multiplied by a predefined (small) 
+scalar to handle the non-invertibility of a graph Laplacian matrix. 'vrPEER' 
+(variable reducted PEER) method performs variable-reduction procedure to handle 
+the non-invertibility of a graph Laplacian matrix.
 }
-

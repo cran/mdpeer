@@ -1,131 +1,103 @@
-# vrPEER function data objects consistency 
-# 
-# Validate vrPEER function data objects dimensions consistency 
-# 
-# @param Q graph Laplacian matrix
-# @param y response values matrix (n x 1)
-# @param Z design matrix (n x p) modeled as random effects variables 
-# @param X design matrix (n x k) modeled as fixed effects variables 
-# @return NULL
-# 
-validate.vrPEER.data.objects <- function(Q, y, Z, X){
-  if (!(dim(y)[1] == dim(Z)[1])) stop("dim(y)[1] != dim(Z)[1]")
-  if (!(dim(y)[1] == dim(Z)[1])) stop("dim(y)[1] != dim(Z)[1]")
-  if (!(dim(Q)[2] == dim(Z)[2])) stop("dim(L)[2] != dim(Z)[2]")
-  if (!is.null(X)) if(!(dim(y)[1] == dim(X)[1])) stop("dim(y)[1] != dim(X)[1]")
-}
-
-
-
 
 #' Graph-constrained regression with variable-reduction procedure to handle the non-invertibility of 
 #' a graph-originated penalty matrix
 #' 
-#' @param Q graph-originated penalty matrix \eqn{(p \times p)}, typically: a graph Laplacian matrix
+#' @description 
+#' 
+#' Graph-constrained regression with variable-reduction procedure to handle the non-invertibility of 
+#' a graph-originated penalty matrix (see: References). 
+#' 
+#' Bootstrap confidence intervals computation is available (not set as a default option). 
+#' 
+#' @param Q graph-originated penalty matrix \eqn{(p \times p)}; typically: a graph Laplacian matrix
 #' @param y response values matrix \eqn{(n \times 1)}
-#' @param Z design matrix \eqn{(n \times p)} modeled as random effects variables (to be penalized in regression modeling)
-#' @param X design matrix \eqn{(n \times k)} modeled as fixed effects variables (not to be penalized in regression modeling)
-#' @param Q.normalized logical whether or not to use normalized version of a graph-originated penalty matrix
-#' @param sv.thr - threshold value above which singular values of \code{Q} are considered "zeros" 
-#' @param compute.Grace logical whether or not to compute \href{https://arxiv.org/abs/1506.08339}{Grace test} 
-#' (a significance test for graph-constrained estimation) results 
+#' @param Z design matrix \eqn{(n \times p)} modeled as random effects variables (to be penalized in regression modeling); 
+#' **assumed to be already standarized** 
+#' @param X design matrix \eqn{(n \times k)} modeled as fixed effects variables (not to be penalized in regression modeling); 
+#' **should contain colum of 1s if intercept is to be considered in a model** 
+#' @param sv.thr threshold value above which singular values of \code{Q} are considered "zeros" 
+#' @param compute.boot.CI logical whether or not compute bootstrap confidence intervals for \eqn{b} regression coefficient estimates
+#' @param boot.R number of bootstrap replications used in bootstrap confidence intervals computation
+#' @param boot.conf confidence level assumed in bootstrap confidence intervals computation
+#' @param boot.set.seed logical whether or not set seed in bootstrap confidence intervals computation
+#' @param boot.parallel value of \code{parallel} argument in \code{boot} function in bootstrap confidence intervals computation
+#' @param boot.ncpus value of \code{ncpus} argument in \code{boot} function in bootstrap confidence intervals computation
+#' @param verbose logical whether or not set verbose mode (print out function execution messages)
+#' @md 
 #' 
 #' @return 
-#' \item{b.est}{vector with estimated values of \eqn{b} coefficients}
-#' \item{beta.est}{vector with estimated values of \eqn{\beta} coefficients}
-#' \item{lambda.Q}{value of \eqn{\lambda_Q} regularization parameter}
-#' \item{grace.test.res}{output from the Grace significance test for graph-constrained estimation computation}
+#' \item{b.est}{vector of \eqn{b} coefficient estimates}
+#' \item{beta.est}{vector of \eqn{\beta} coefficient estimates}
+#' \item{lambda.Q}{\eqn{\lambda_Q} regularization parameter value}
+#' \item{boot.CI}{data frame with two columns, \code{lower} and \code{upper}, containing, respectively, values of lower and upper bootstrap confidence intervals for \eqn{b} regression coefficient estimates}
 #' 
-#' @examples 
-#' # Example 1. 
-#' 
+#' @examples
 #' set.seed(1234)
-#' # graph Adjacency matrix
-#' n <- 200 
+#' n <- 200
 #' p1 <- 10
 #' p2 <- 90
 #' p <- p1 + p2
+#' # Define graph adjacency matrix
 #' A <- matrix(rep(0, p*p), nrow = p, ncol = p)
 #' A[1:p1, 1:p1] <- 1
 #' A[(p1+1):p, (p1+1):p] <- 1
-#' # graph Laplacian matrix
 #' L <- Adj2Lap(A)
-#' L.norm <- L2L.normalized(L)
-#' # Z design matrix 
+#' # Define Q penalty matrix as graph Laplacian matrix normalized)
+#' Q <- L2L.normalized(L)
+#' # Define Z,X design matrices and aoutcome y
 #' Z <- matrix(rnorm(n*p), nrow = n, ncol = p)
-#' # True b coefficients 
-#' b.true<- c(rep(1, p1), rep(0, p2))
-#' beta.true <- runif(3)
-#' intercept <- 0
-#' eta <- intercept + Z %*% b.true 
-#' R2 <- 0.5 # assumed variance explained 
-#' sd.eps <- sqrt(var(eta) * (1 - R2) / R2)
-#' error <- rnorm(n, sd = sd.eps)
-#' # Y observed 
-#' Y <- eta + error
-#' 
-#' # model estimation
-#' vrPEER.fit <- vrPEER(Q = L.norm, y = Y, Z = Z, X = NULL)
-#'
-#' # b coefficient estimates
-#' vrPEER.fit$b.est
-#' # regularization parameter values
-#' vrPEER.fit$lambda.Q
-#' 
-#' 
-#' # Example 2.: model with non-penalized covariates 
-#' 
-#' # X design matrix (covariates which are not to be penalized)
+#' b.true <- c(rep(1, p1), rep(0, p2))
 #' X <- matrix(rnorm(n*3), nrow = n, ncol = 3)
 #' beta.true <- runif(3)
 #' intercept <- 0
 #' eta <- intercept + Z %*% b.true + X %*% beta.true
-#' R2 <- 0.5 # assumed variance explained 
+#' R2 <- 0.5
 #' sd.eps <- sqrt(var(eta) * (1 - R2) / R2)
 #' error <- rnorm(n, sd = sd.eps)
-#' # Y observed 
-#' Y <- eta + error
+#' y <- eta + error
 #' 
-#' # model estimation
-#' vrPEER.fit <- vrPEER(Q = L.norm, y = Y, Z = Z, X = X)
+#' \dontrun{
+#' # run vrPEER 
+#' vrPEER.out <- vrPEER(Q, y, Z, X)
+#' plt.df <- data.frame(x = 1:p, 
+#'                      y = vrPEER.out$b.est)
+#' ggplot(plt.df, aes(x = x, y = y, group = 1)) + geom_line()
+#' }
 #' 
-# '# b coefficient estimates
-#' vrPEER.fit$b.est
-#' # beta coefficient estimates
-#' vrPEER.fit$beta.est
-#' # regularization parameters values
-#' vrPEER.fit$lambda.Q
-#'
+#' \dontrun{
+#' # run vrPEER with 0.95 confidence intrvals 
+#' vrPEER.out <- vrPEER(Q, y, Z, X, compute.boot.CI = TRUE, boot.R = 500)
+#' plt.df <- data.frame(x = 1:p, 
+#'                      y = vrPEER.out$b.est, 
+#'                      lo = vrPEER.out$boot.CI[,1], 
+#'                      up =  vrPEER.out$boot.CI[,2])
+#' ggplot(plt.df, aes(x = x, y = y, group = 1)) + geom_line() +  
+#'   geom_ribbon(aes(ymin=lo, ymax=up), alpha = 0.3)
+#' }
+#' 
 #' @references 
-#' Brumback, B. A., Ruppert, D., Wand, M. P., Comment on 'Variable selection and function estimation in
-#' additive nonparametric regression using a data-based prior'. Journal of the American Statistical
-#' Association (1999): 94, 794–797.
+#' Karas, M., Brzyski, D., Dzemidzic, M., J., Kareken, D.A., Randolph, T.W., Harezlak, J. (2017). 
+#' Brain connectivity-informed regularization methods for regression. doi: https://doi.org/10.1101/117945 
 #' 
-#' Karas, M., Brzyski, D., Randolph, T., Harezlak, D. Brain connectivity-informed regularization methods for regression. Paper in progress, to be submited as an invited paper on CCNS for a special issue of  Statistics in Biosciences by Nov 30, 2016 (reference will be updated).
-#'
-#' Li, C., Li, H., Network-constrained regularization and variable selection for analysis of genomic data. 
-#' Bioinformatics (2008): 24(9), 1175-1182.
-#' 
-#' Li, C., Li, H., Variable selection and regression analysis for graph-structured covariates with an application to genomics. 
-#' The Annals of Applied Statistics (2010): 4(3), 1498–1516.
-#' 
-#' Randolph, T., Harezlak, J., Feng, Z., Structured penalties for functional linear models—partially empirical 
-#' eigenvectors for regression. The Electronic Journal of Statistics (2012): 6, 323-353.
-#' 
+#' @import boot
 #' @import nlme
 #' @export
 #' 
 vrPEER <- function(Q, y, Z, X = NULL, 
-                   Q.normalized = FALSE, 
                    sv.thr = 1e-5, 
-                   compute.Grace = FALSE){
+                   compute.boot.CI = FALSE,
+                   boot.R = 1000,
+                   boot.conf = 0.95,
+                   boot.set.seed = TRUE,
+                   boot.parallel = "multicore",
+                   boot.ncpus = 4,
+                   verbose = TRUE){
 
   # Check for data objects dimensions consistency 
-  validate.vrPEER.data.objects(Q, y, Z, X)
-  
-  # Transform data objects 
-  if (Q.normalized) Q <- L2L.normalized(Q)
-  
+  if (dim(y)[1] != dim(Z)[1]) stop("dim(y)[1] != dim(Z)[1]")
+  if (dim(Q)[2] != dim(Z)[2]) stop("dim(L)[2] != dim(Z)[2]")
+  if (!is.null(X)) if(dim(y)[1] != dim(X)[1]) stop("dim(y)[1] != dim(X)[1]")
+
   # Construct data objects used in variable-reduction approach
   pcov <- ifelse(is.null(X), 0, dim(X)[2])
   Z.ext <- cbind(X, Z) 
@@ -168,31 +140,6 @@ vrPEER <- function(Q, y, Z, X = NULL,
   sigma.u <- as.numeric(as.matrix(VarCorr(lme.fit))[1, 2])
   lambda.Q <- (sigma.eps^2)/(sigma.u^2)
   
-  # Compute Grace Test results
-  if (!compute.Grace){
-    grace.test.res <- NULL
-  } else {
-    grace.test.res <- tryCatch({
-      Q.opt <- lambda.Q * Q.ext
-      gt.res <- grace.test.C(Y = y, X = Z.ext, L = Q.opt, lambda.L = 1, lambda.2 = 0, normalize.L = F,
-                             normalize.X  = FALSE, center.Y = FALSE)
-      gt.beta <- gt.res$beta
-      gt.beta.pval <- gt.res$pvalue
-      if (pcov > 0){
-        gt.b.est <- gt.beta[(pcov+1):(pcov+dim(Z)[2])]
-        gt.b.est.pval <- gt.beta.pval[(pcov+1):(pcov+dim(Z)[2])]
-      } else {
-        gt.b.est <- gt.beta
-        gt.b.est.pval <- gt.beta.pval
-      }
-      list(b.est = gt.b.est, b.est.pval = gt.b.est.pval, Q.opt = Q.opt)
-    }, error = function(e) {
-      msg <- "ERROR OCURRED WHEN PROCEEDING WITH grace.test"
-      message(msg); message(e)
-      msg
-    }) 
-  }
-  
   # Compute coefficient estimates
   beta.b.est <- as.vector(solve(t(Z.ext) %*% Z.ext + lambda.Q * Q.ext) %*% t(Z.ext) %*% y)
   if (is.null(colnames(Z.ext))) names(beta.b.est) <- colnames(Z.ext)
@@ -204,9 +151,38 @@ vrPEER <- function(Q, y, Z, X = NULL,
     beta.est <- c()
   }
   
+  # Compute bootstrap confidence intervals
+  if (compute.boot.CI){
+    if(verbose) message(paste0("vrPEER: computing bootstrap CI with ", boot.R, " replications..."))
+    b.est.boot <- function(data, indices, lambda.Q, Q.ext, pX, pZ) {
+      data.boot <- data[indices, ]
+      y.boot      <- as.matrix(data.boot[,1])
+      Z.ext.boot  <- as.matrix(data.boot[,2:(ncol(data))])
+      beta.b.est.boot <- as.vector(solve(t(Z.ext.boot) %*% Z.ext.boot + lambda.Q * Q.ext) %*% t(Z.ext.boot) %*% y.boot)
+      if (pX > 0){
+        b.est.boot <- beta.b.est.boot[(pX+1):(pX+pZ)]
+      } else {
+        b.est.boot <- beta.b.est.boot
+      }
+      return(as.vector(b.est.boot))
+    } 
+    if (boot.set.seed) set.seed(1)
+    boot.out <- boot(data = cbind(y, Z.ext), statistic = b.est.boot, 
+                     R = boot.R, lambda.Q = lambda.Q, Q.ext = Q.ext, pX = pcov, pZ = dim(Z)[2], 
+                     parallel = boot.parallel, ncpus = boot.ncpus)
+    boot.CI.l <- lapply(1:(dim(boot.out$t)[2]), function(idx){
+      boot.ci.out <- (boot.ci(boot.out, type = "bca", index = idx, conf = boot.conf))$bca
+      return(boot.ci.out[c(4,5)])
+    })
+    boot.CI <- do.call(rbind.data.frame, boot.CI.l)
+    names(boot.CI) <- c("lower", "upper")
+  } else {
+    boot.CI <- NULL
+  }
+  
   res.list <- list(b.est = b.est, 
                    beta.est = beta.est, 
                    lambda.Q = lambda.Q,
-                   grace.test.res = grace.test.res)
+                   boot.CI  = boot.CI)
   return(res.list)
 }
